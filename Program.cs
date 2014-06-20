@@ -85,17 +85,17 @@ namespace A2AFragmentFixer
             bool res = false;
 
             //XElement usFragment = ExtractFragment(fragmentPath);
-            //XDocument intlDoc = XDocument.Load(articlePath);
+            XDocument intlDoc = XDocument.Load(fragmentPath);
 
-            //var namespaceManager = new XmlNamespaceManager(new NameTable());
-            //namespaceManager.AddNamespace("def", "http://ddue.schemas.microsoft.com/authoring/2003/5");
-            //namespaceManager.AddNamespace("xlink", "http://www.w3.org/1999/xlink");
+            var namespaceManager = new XmlNamespaceManager(new NameTable());
+            namespaceManager.AddNamespace("def", "http://ddue.schemas.microsoft.com/authoring/2003/5");
+            namespaceManager.AddNamespace("xlink", "http://www.w3.org/1999/xlink");
 
-            //foreach (var xe in xDoc.XPathSelectElements("//default:link", namespaceManager))
-            //{
-            //}
+            foreach (var xe in intlDoc.XPathSelectElements("//def:para", namespaceManager))
+            {
+            }
 
-            using (var r = File.OpenText(articlePath))
+            using (var r = File.OpenText(fragmentPath))
             {
                 XPathDocument xd = new XPathDocument(XmlReader.Create(r));
                 XPathNavigator xn = xd.CreateNavigator();
@@ -108,6 +108,13 @@ namespace A2AFragmentFixer
                 foreach (XPathNavigator nav in xni)
                 {
                     Console.WriteLine(nav.Name);
+                    var x = nav.HasChildren;
+                    nav.MoveToFirstChild();
+                    x = nav.HasChildren;
+                    nav.MoveToFirstChild();
+                    x = nav.HasChildren;
+                    nav.MoveToFirstChild();
+                    nav.MoveToNext();
                 }
             }
             return res;
