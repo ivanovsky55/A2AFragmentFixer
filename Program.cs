@@ -12,19 +12,10 @@ namespace A2AFragmentFixer
     {
         static void Main(string[] args)
         {
-
-            //GetNewestFilename(@"C:\Users\v-ivayal\Desktop\Temp\OCMS2Dx\Converted", "HA1");
-
-
-            //XDocument xDoc = XDocument.Load(@"C:\Users\v-ivayal\Desktop\Temp\XMLs\_EmptyTop_HA102749557.0.8.xml");
-
-            //var namespaceManager = new  XmlNamespaceManager(new NameTable());
-            //namespaceManager.AddNamespace("default", "http://ddue.schemas.microsoft.com/authoring/2003/5");
-
-            //XNamespace ns = "";
-            //foreach (var xe in xDoc.XPathSelectElements("//default:link", namespaceManager))
-            //{
-            //}
+            //string fixPath = args[0];
+            string fixPath = @"C:\Users\v-ivayal\Desktop\Temp\XMLs\Test\OCMS2DX-Spanish";
+            string usPath = @"C:\Users\v-ivayal\Desktop\Temp\XMLs\Test\OCMS2DX-English";
+            FixFolder(fixPath, usPath);
         }
 
         private static void FixFolder(string marketFolderPath, string usFolderPath)
@@ -41,6 +32,11 @@ namespace A2AFragmentFixer
                 {
                     var convertedPath = Path.Combine(marketFolderPath, "Converted");
                     var filename = GetNewestDduemlPath(convertedPath, assetId);
+                    if (String.IsNullOrEmpty(filename))
+                    {
+                        //Log it?
+                        continue;
+                    }
 
                     var relatedAssets = TryGetXValue(xe, "ResolvedDependencies").Split(',');
                     List<string> fragmentIds = new List<string>();
@@ -48,22 +44,82 @@ namespace A2AFragmentFixer
                         if (id.Contains("FR")) fragmentIds.Add(id);
 
                     var usConvertedPath = Path.Combine(usFolderPath, "Converted");
-                    FixFile(filename, fragmentIds, usConvertedPath);
+                    FixFile(filename, fragmentIds, convertedPath, usConvertedPath);
                 }
             }
         }
 
-        private static void FixFile(string fileName, List<string> fragmentIds, string UsConvPath)
+        //HA010341571
+        //FR102751215
+
+        //FR000038914 This FR has <introduction /> but is not referenced by articles
+
+        private static void FixFile(string fileName, List<string> fragmentIds, string intlConvPath, string UsConvPath)
         {
-            ////For each fragment in that article, Go to the English Converted folder and grab its FR.xml
+            //For each fragment in that article, Go to the English Converted folder and grab its FR.xml
             foreach (var frId in fragmentIds)
             {
-                var englishFragmentPath = GetNewestDduemlPath(UsConvPath, frId);
-                //////Search if the structure exists in the Intl/Converted/HA.xml file
+                var intlFragmentPath = GetNewestDduemlPath(intlConvPath, frId);
+                var usFragmentPath = GetNewestDduemlPath(UsConvPath, frId);
+                if (String.IsNullOrWhiteSpace(intlFragmentPath) || String.IsNullOrWhiteSpace(usFragmentPath))
+                {
+                    //Log?
+                    continue;
+                }
+                //Search if the structure exists in the Intl/Converted/HA.xml file
+
+                if (IsXmlSubset(fileName, usFragmentPath))
+                { }
+
+                //XElement intlFragment = ExtractFragment(intlFragmentPath);
+
+
                 //////If it exists...
                 ////////it's an unlocalized fragment, so we grab Intl/Converted/FR.xml and replace the identified English FR
                 //////If it doesn't exist, that fragment is localized or non-existant, so ignore it and check the next fragment for that article
             }
+        }
+
+        private static bool IsXmlSubset(string articlePath, string fragmentPath)
+        {
+            bool res = false;
+
+            //XElement usFragment = ExtractFragment(fragmentPath);
+            //XDocument intlDoc = XDocument.Load(articlePath);
+
+            //var namespaceManager = new XmlNamespaceManager(new NameTable());
+            //namespaceManager.AddNamespace("def", "http://ddue.schemas.microsoft.com/authoring/2003/5");
+            //namespaceManager.AddNamespace("xlink", "http://www.w3.org/1999/xlink");
+
+            //foreach (var xe in xDoc.XPathSelectElements("//default:link", namespaceManager))
+            //{
+            //}
+
+            using (var r = File.OpenText(articlePath))
+            {
+                XPathDocument xd = new XPathDocument(XmlReader.Create(r));
+                XPathNavigator xn = xd.CreateNavigator();
+
+                XmlNamespaceManager nsmgr = new XmlNamespaceManager(xn.NameTable);
+                nsmgr.AddNamespace("def", "http://ddue.schemas.microsoft.com/authoring/2003/5");
+
+                XPathNodeIterator xni = xn.Select("//def:introduction", nsmgr);
+
+                foreach (XPathNavigator nav in xni)
+                {
+                    Console.WriteLine(nav.Name);
+                }
+            }
+            return res;
+        }
+
+        private static XElement ExtractFragment(string fragmentPath)
+        {
+            var xDoc = XDocument.Load(fragmentPath);
+            var namespaceManager = new XmlNamespaceManager(new NameTable());
+            namespaceManager.AddNamespace("d", "http://ddue.schemas.microsoft.com/authoring/2003/5");
+            var res = xDoc.XPathSelectElement("//d:introduction", namespaceManager);
+            return res;
         }
 
         private static string TryGetXValue(XElement xe, string query)
@@ -127,3 +183,17 @@ namespace A2AFragmentFixer
 
     }
 }
+
+
+//GetNewestFilename(@"C:\Users\v-ivayal\Desktop\Temp\OCMS2Dx\Converted", "HA1");
+
+
+//XDocument xDoc = XDocument.Load(@"C:\Users\v-ivayal\Desktop\Temp\XMLs\_EmptyTop_HA102749557.0.8.xml");
+
+//var namespaceManager = new  XmlNamespaceManager(new NameTable());
+//namespaceManager.AddNamespace("default", "http://ddue.schemas.microsoft.com/authoring/2003/5");
+
+//XNamespace ns = "";
+//foreach (var xe in xDoc.XPathSelectElements("//default:link", namespaceManager))
+//{
+//}
