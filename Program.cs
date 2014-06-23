@@ -10,17 +10,32 @@ namespace A2AFragmentFixer
 {
     class Program
     {
+        static StreamWriter file;
         static void Main(string[] args)
         {
             //string fixPath = args[0];
-            string fixPath = @"C:\Users\v-ivayal\Desktop\Temp\XMLs\Test\OCMS2DX-Spanish";
-            string usPath = @"C:\Users\v-ivayal\Desktop\Temp\XMLs\Test\OCMS2DX-English";
+            //string fixPath = @"C:\Users\v-ivayal\Desktop\Temp\XMLs\Test\OCMS2DX-Spanish";
+            //string usPath = @"C:\Users\v-ivayal\Desktop\Temp\XMLs\Test\OCMS2DX-English";
+            string fixPath = @"\\hyunor01srv\share\SDSeeding\A2AMigrationOutput\OCMS2DX-Spanish";
+            string usPath = @"\\hyunor01srv\share\SDSeeding\A2AMigrationOutput\OCMS2DX-English";
+
+            string logPath = @"C:\Users\v-ivayal\Desktop\Pseudo Trash\log.txt";
+            file = new System.IO.StreamWriter(logPath);
+
             FixFolder(fixPath, usPath);
+            file.Close();
+            Console.ReadKey();
         }
+
+        static Dictionary<string, string> convertedDictionaryIntl;
+        static Dictionary<string, string> convertedDictionaryUs;
 
         private static void FixFolder(string marketFolderPath, string usFolderPath)
         {
             var doc = XDocument.Load(Path.Combine(marketFolderPath, "ConvertAssets.xml"));
+
+            convertedDictionaryIntl = GetConvertedPathsDictionary(marketFolderPath);
+            convertedDictionaryUs = GetConvertedPathsDictionary(usFolderPath);
 
             //Iterate each of the Lead assets that have FR Dependent Assets
             //Only do this for HA, VA, RZ
@@ -31,7 +46,7 @@ namespace A2AFragmentFixer
                 if (assetId.Contains("HA") || assetId.Contains("VA") || assetId.Contains("RZ"))
                 {
                     var convertedPath = Path.Combine(marketFolderPath, "Converted");
-                    var filename = GetNewestDduemlPath(convertedPath, assetId);
+                    var filename = TryGetPath(assetId, convertedDictionaryIntl);
                     if (String.IsNullOrEmpty(filename))
                     {
                         //Log it?
@@ -41,7 +56,7 @@ namespace A2AFragmentFixer
                     var relatedAssets = TryGetXValue(xe, "ResolvedDependencies").Split(',');
                     List<string> fragmentIds = new List<string>();
                     foreach (var id in relatedAssets)
-                        if (id.Contains("FR")) fragmentIds.Add(id);
+                        if (id.Contains("FR")) fragmentIds.Add(id.Trim());
 
                     var usConvertedPath = Path.Combine(usFolderPath, "Converted");
                     FixFile(filename, fragmentIds, convertedPath, usConvertedPath);
@@ -59,8 +74,8 @@ namespace A2AFragmentFixer
             //For each fragment in that article, Go to the English Converted folder and grab its FR.xml
             foreach (var frId in fragmentIds)
             {
-                var intlFragmentPath = GetNewestDduemlPath(intlConvPath, frId);
-                var usFragmentPath = GetNewestDduemlPath(UsConvPath, frId);
+                var intlFragmentPath = TryGetPath(frId, convertedDictionaryIntl);
+                var usFragmentPath = TryGetPath(frId, convertedDictionaryUs);
                 if (String.IsNullOrWhiteSpace(intlFragmentPath) || String.IsNullOrWhiteSpace(usFragmentPath))
                 {
                     //Log?
@@ -68,7 +83,7 @@ namespace A2AFragmentFixer
                 }
                 //Search if the structure exists in the Intl/Converted/HA.xml file
 
-                if (IsXmlSubset(fileName, usFragmentPath))
+                if (IsXmlSubset(fileName, usFragmentPath, intlFragmentPath))
                 { }
 
                 //XElement intlFragment = ExtractFragment(intlFragmentPath);
@@ -80,43 +95,98 @@ namespace A2AFragmentFixer
             }
         }
 
-        private static bool IsXmlSubset(string articlePath, string fragmentPath)
+        private static string StripFragment(string fr)
         {
-            bool res = false;
+            string fragmentText = fr.Replace("<?xml version=\"1.0\" encoding=\"utf-8\"?>", "")
+                        .Replace("<developerConceptualDocument xmlns=\"http://ddue.schemas.microsoft.com/authoring/2003/5\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">", "")
+                        .Replace("  <introduction>", "")
+                        .Replace("  </introduction>", "")
+                        .Replace("  <relatedTopics />", "")
+                        .Replace("</developerConceptualDocument>", "")
+                        .Replace(" address=\"__goback\"", "")
+                        .Trim();
+            return fragmentText;
+        }
 
-            //XElement usFragment = ExtractFragment(fragmentPath);
-            XDocument intlDoc = XDocument.Load(fragmentPath);
+        private static string FlattenString(string s)
+        {
+            string res = s.Replace("  ", "").Replace("\r\n", "");
 
-            var namespaceManager = new XmlNamespaceManager(new NameTable());
-            namespaceManager.AddNamespace("def", "http://ddue.schemas.microsoft.com/authoring/2003/5");
-            namespaceManager.AddNamespace("xlink", "http://www.w3.org/1999/xlink");
+            //Remove <linkUri>.*?</linkUri> as they are inconsistent
+            string regex = "<linkUri>.*?</linkUri>";
+            RegexOptions options = ((RegexOptions.IgnorePatternWhitespace | RegexOptions.Multiline) | RegexOptions.IgnoreCase);
+            Regex reg = new System.Text.RegularExpressions.Regex(regex, options);
+            res = reg.Replace(res, "");
 
-            foreach (var xe in intlDoc.XPathSelectElements("//def:para", namespaceManager))
+            return res;
+        }
+
+        //Works for Spanish HA010341571+FR102751215
+        //HA102749523 FR104209832
+        private static bool IsXmlSubset(string articlePath, string fragmentPath, string intlFragmentPath)
+        {
+            bool res = true;
+
+            string flatUsFragText = FlattenString(StripFragment(File.ReadAllText(fragmentPath)));
+            var flatArticleText = FlattenString(File.ReadAllText(articlePath));
+
+            if (flatArticleText.Contains(flatUsFragText))
             {
+                Console.WriteLine("Needs FR Fix: [" + Path.GetFileName(fragmentPath) + "] [" + Path.GetFileName(articlePath) + "]");
+                file.WriteLine("Needs FR Fix: [" + Path.GetFileName(fragmentPath) + "] [" + Path.GetFileName(articlePath) + "]");
+                return false;
+                ////REPLACE US FRAG WITH INTL FRAG
+                //var articleText = FlattenString(File.ReadAllText(articlePath));
+                //string intlFragmentText = StripFragment(File.ReadAllText(intlFragmentPath));
+                //string newArticleText = articleText.Replace("xxx", intlFragmentText);
+                //File.WriteAllText(@"C:\Users\v-ivayal\Desktop\Pseudo Trash\new.xml", newArticleText);
             }
-
-            using (var r = File.OpenText(fragmentPath))
+            else
             {
-                XPathDocument xd = new XPathDocument(XmlReader.Create(r));
-                XPathNavigator xn = xd.CreateNavigator();
-
-                XmlNamespaceManager nsmgr = new XmlNamespaceManager(xn.NameTable);
-                nsmgr.AddNamespace("def", "http://ddue.schemas.microsoft.com/authoring/2003/5");
-
-                XPathNodeIterator xni = xn.Select("//def:introduction", nsmgr);
-
-                foreach (XPathNavigator nav in xni)
+                string flatIntlFragText = FlattenString(StripFragment(File.ReadAllText(fragmentPath)));
+                if (!flatArticleText.Contains(flatIntlFragText))
                 {
-                    Console.WriteLine(nav.Name);
-                    var x = nav.HasChildren;
-                    nav.MoveToFirstChild();
-                    x = nav.HasChildren;
-                    nav.MoveToFirstChild();
-                    x = nav.HasChildren;
-                    nav.MoveToFirstChild();
-                    nav.MoveToNext();
+                    Console.WriteLine("Neither FR is in file: [" + Path.GetFileName(fragmentPath) + "] [" + Path.GetFileName(articlePath) + "]");
+                    file.WriteLine("Neither FR is in file: [" + Path.GetFileName(fragmentPath) + "] [" + Path.GetFileName(articlePath) + "]");
+                    return false;
                 }
             }
+            file.WriteLine(" OK: [" + Path.GetFileName(fragmentPath) + "] [" + Path.GetFileName(articlePath) + "]");
+
+            //XElement usFragment = ExtractFragment(fragmentPath);
+            //XDocument intlDoc = XDocument.Load(fragmentPath);
+
+            //var namespaceManager = new XmlNamespaceManager(new NameTable());
+            //namespaceManager.AddNamespace("def", "http://ddue.schemas.microsoft.com/authoring/2003/5");
+            //namespaceManager.AddNamespace("xlink", "http://www.w3.org/1999/xlink");
+
+            //foreach (var xe in intlDoc.XPathSelectElements("//def:para", namespaceManager))
+            //{
+            //}
+
+            //using (var r = File.OpenText(fragmentPath))
+            //{
+            //    XPathDocument xd = new XPathDocument(XmlReader.Create(r));
+            //    XPathNavigator xn = xd.CreateNavigator();
+
+            //    XmlNamespaceManager nsmgr = new XmlNamespaceManager(xn.NameTable);
+            //    nsmgr.AddNamespace("def", "http://ddue.schemas.microsoft.com/authoring/2003/5");
+
+            //    XPathNodeIterator xni = xn.Select("//def:introduction", nsmgr);
+
+            //    foreach (XPathNavigator nav in xni)
+            //    {
+            //        Console.WriteLine(nav.Name);
+            //        var x = nav.HasChildren;
+            //        nav.MoveToFirstChild();
+            //        x = nav.HasChildren;
+            //        nav.MoveToFirstChild();
+            //        x = nav.HasChildren;
+            //        nav.MoveToFirstChild();
+            //        nav.MoveToNext();
+            //    }
+            //}
+
             return res;
         }
 
@@ -141,53 +211,122 @@ namespace A2AFragmentFixer
         }
 
 
-        private static string GetNewestDduemlPath(string convFolder, string assetId)
+        //private static string GetNewestDduemlPath(string convFolder, string assetId)
+        //{
+        //    var res = "";
+        //    var files = Directory.GetFiles(convFolder, assetId + "*.xml");
+        //    if (files.Length == 1)
+        //        res = files[0];
+        //    else
+        //    {
+        //        if (files.Length != 0)
+        //        {
+        //            res = files[0];
+        //            foreach (var file in files)
+        //            {
+        //                string regex = ".*\\.(\\d*)\\.(\\d*)\\..*";
+        //                Regex reg = new Regex(regex);
+
+        //                var matchOld = reg.Match(Path.GetFileName(res));
+        //                var majorVersionOld = Convert.ToInt32(matchOld.Groups[1].Value);
+        //                var minorVersionOld = Convert.ToInt32(matchOld.Groups[2].Value);
+
+        //                var matchNew = reg.Match(Path.GetFileName(file));
+        //                var majorVersionNew = Convert.ToInt32(matchNew.Groups[1].Value);
+        //                var minorVersionNew = Convert.ToInt32(matchNew.Groups[2].Value);
+
+        //                //If new file has a higher major version, we take it
+        //                if (majorVersionOld < majorVersionNew)
+        //                {
+        //                    res = file;
+        //                }
+        //                else
+        //                {
+        //                    //If the major versions are the same, we may still take it...
+        //                    if (majorVersionOld == majorVersionNew)
+        //                    {
+        //                        //if the new file has a minor version higher than the current, we take it
+        //                        if (minorVersionOld < minorVersionNew)
+        //                        {
+        //                            res = file;
+        //                        }
+        //                    }
+        //                }
+        //            }
+        //        }
+        //    }
+        //    return res;
+        //}
+
+        private static Dictionary<string, string> GetConvertedPathsDictionary(string basePath)
         {
-            var res = "";
-            var files = Directory.GetFiles(convFolder, assetId + "*.xml");
-            if (files.Length == 1)
-                res = files[0];
-            else
+            Dictionary<string, string> res = new Dictionary<string, string>();
+            var convPath = Path.Combine(basePath, "Converted");
+            foreach (var f in Directory.GetFiles(convPath, "*.xml"))
             {
-                if (files.Length != 0)
+                //HA010186549.10.4.xml //VA102811844.0.14.xml
+                var fName = Path.GetFileName(f);
+                string regex = "(.*)\\.\\d*\\.\\d*\\..*";
+                Regex reg = new System.Text.RegularExpressions.Regex(regex);
+                var match = reg.Match(fName);
+                var assetId = match.Groups[1].Value;
+                if (!res.ContainsKey(assetId))
                 {
-                    res = files[0];
-                    foreach (var file in files)
-                    {
-                        string regex = ".*\\.(\\d*)\\.(\\d*)\\..*";
-                        Regex reg = new Regex(regex);
-
-                        var matchOld = reg.Match(Path.GetFileName(res));
-                        var majorVersionOld = Convert.ToInt32(matchOld.Groups[1].Value);
-                        var minorVersionOld = Convert.ToInt32(matchOld.Groups[2].Value);
-
-                        var matchNew = reg.Match(Path.GetFileName(file));
-                        var majorVersionNew = Convert.ToInt32(matchNew.Groups[1].Value);
-                        var minorVersionNew = Convert.ToInt32(matchNew.Groups[2].Value);
-
-                        //If new file has a higher major version, we take it
-                        if (majorVersionOld < majorVersionNew)
-                        {
-                            res = file;
-                        }
-                        else
-                        {
-                            //If the major versions are the same, we may still take it...
-                            if (majorVersionOld == majorVersionNew)
-                            {
-                                //if the new file has a minor version higher than the current, we take it
-                                if (minorVersionOld < minorVersionNew)
-                                {
-                                    res = file;
-                                }
-                            }
-                        }
-                    }
+                    res.Add(assetId, f);
+                }
+                else
+                {
+                    res[assetId] = DetermineNewest(assetId, res[assetId], f);
                 }
             }
             return res;
         }
 
+        private static string DetermineNewest(string assetId, string oldFile, string newFile)
+        {
+            string regex = ".*\\.(\\d*)\\.(\\d*)\\..*";
+            Regex reg = new System.Text.RegularExpressions.Regex(regex);
+
+            var matchOld = reg.Match(Path.GetFileName(oldFile));
+            var majorVersionOld = Convert.ToInt32(matchOld.Groups[1].Value);
+            var minorVersionOld = Convert.ToInt32(matchOld.Groups[2].Value);
+
+            var matchNew = reg.Match(Path.GetFileName(newFile));
+            var majorVersionNew = Convert.ToInt32(matchNew.Groups[1].Value);
+            var minorVersionNew = Convert.ToInt32(matchNew.Groups[2].Value);
+
+            //If new file has a higher major version, we update the dictionary
+            if (majorVersionOld < majorVersionNew)
+            {
+                return newFile;
+            }
+            else
+            {
+                //If the major versions are the same, we may still take it...
+                if (majorVersionOld == majorVersionNew)
+                {
+                    //if the new file has a minor version higher than the current, we update
+                    if (minorVersionOld < minorVersionNew)
+                    {
+                        return newFile;
+                    }
+                }
+            }
+            return oldFile;
+        }
+
+        private static string TryGetPath(string assetId, Dictionary<string, string> dic)
+        {
+            string res = "";
+
+            try
+            {
+                res = dic[assetId];
+            }
+            catch (KeyNotFoundException) { }
+
+            return res;
+        }
     }
 }
 
