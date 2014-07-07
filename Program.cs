@@ -16,14 +16,67 @@ namespace A2AFragmentFixer
             //string fixPath = args[0];
             //string fixPath = @"C:\Users\v-ivayal\Desktop\Temp\XMLs\Test\OCMS2DX-Spanish";
             //string usPath = @"C:\Users\v-ivayal\Desktop\Temp\XMLs\Test\OCMS2DX-English";
-            string fixPath = @"\\hyunor01srv\share\SDSeeding\A2AMigrationOutput\OCMS2DX-Spanish";
+
+            //string fixPath = @"\\WIN-E5U3RQA9QQH\MigrationTransfer\T1 Migration Kick-off\OCMS2Dx-Chinese-Simplified";
+
+            //string usPath = @"\\hyunor01srv\share\SDSeeding\A2AMigrationOutput\OCMS2DX-English";
+            //string logPath = @"C:\Users\v-ivayal\Desktop\Pseudo Trash\log4.txt";
+
             string usPath = @"\\hyunor01srv\share\SDSeeding\A2AMigrationOutput\OCMS2DX-English";
-
-            string logPath = @"C:\Users\v-ivayal\Desktop\Pseudo Trash\log.txt";
+            string fixPath = "";
+            string logPath = "";
+            string mk = "";
+            
+            mk = "Chinese-Simplified";
+            fixPath = @"\\WIN-E5U3RQA9QQH\MigrationTransfer\T1 Migration Kick-off\OCMS2Dx-" + mk;
+            logPath = @"C:\Users\v-ivayal\Desktop\Pseudo Trash\log_" + mk + ".txt";
             file = new System.IO.StreamWriter(logPath);
-
             FixFolder(fixPath, usPath);
             file.Close();
+
+            mk = "French";
+            fixPath = @"\\WIN-E5U3RQA9QQH\MigrationTransfer\T1 Migration Kick-off\OCMS2Dx-" + mk;
+            logPath = @"C:\Users\v-ivayal\Desktop\Pseudo Trash\log_" + mk + ".txt";
+            file = new System.IO.StreamWriter(logPath);
+            FixFolder(fixPath, usPath);
+            file.Close();
+
+            mk = "German";
+            fixPath = @"\\WIN-E5U3RQA9QQH\MigrationTransfer\T1 Migration Kick-off\OCMS2Dx-" + mk;
+            logPath = @"C:\Users\v-ivayal\Desktop\Pseudo Trash\log_" + mk + ".txt";
+            file = new System.IO.StreamWriter(logPath);
+            FixFolder(fixPath, usPath);
+            file.Close();
+
+            mk = "Japanese";
+            fixPath = @"\\WIN-E5U3RQA9QQH\MigrationTransfer\T1 Migration Kick-off\OCMS2Dx-" + mk;
+            logPath = @"C:\Users\v-ivayal\Desktop\Pseudo Trash\log_" + mk + ".txt";
+            file = new System.IO.StreamWriter(logPath);
+            FixFolder(fixPath, usPath);
+            file.Close();
+
+            mk = "Portuguese-Brazil";
+            fixPath = @"\\WIN-E5U3RQA9QQH\MigrationTransfer\T1 Migration Kick-off\OCMS2Dx-" + mk;
+            logPath = @"C:\Users\v-ivayal\Desktop\Pseudo Trash\log_" + mk + ".txt";
+            file = new System.IO.StreamWriter(logPath);
+            FixFolder(fixPath, usPath);
+            file.Close();
+
+            mk = "Russian";
+            fixPath = @"\\WIN-E5U3RQA9QQH\MigrationTransfer\T1 Migration Kick-off\OCMS2Dx-" + mk;
+            logPath = @"C:\Users\v-ivayal\Desktop\Pseudo Trash\log_" + mk + ".txt";
+            file = new System.IO.StreamWriter(logPath);
+            FixFolder(fixPath, usPath);
+            file.Close();
+
+            mk = "Spanish";
+            fixPath = @"\\WIN-E5U3RQA9QQH\MigrationTransfer\T1 Migration Kick-off\OCMS2Dx-" + mk;
+            logPath = @"C:\Users\v-ivayal\Desktop\Pseudo Trash\log_" + mk + ".txt";
+            file = new System.IO.StreamWriter(logPath);
+            FixFolder(fixPath, usPath);
+            file.Close();
+
+            Console.WriteLine("DONE!");
             Console.ReadKey();
         }
 
@@ -34,8 +87,8 @@ namespace A2AFragmentFixer
         {
             var doc = XDocument.Load(Path.Combine(marketFolderPath, "ConvertAssets.xml"));
 
-            convertedDictionaryIntl = GetConvertedPathsDictionary(marketFolderPath);
             convertedDictionaryUs = GetConvertedPathsDictionary(usFolderPath);
+            convertedDictionaryIntl = GetConvertedPathsDictionary(marketFolderPath);
 
             //Iterate each of the Lead assets that have FR Dependent Assets
             //Only do this for HA, VA, RZ
@@ -111,12 +164,17 @@ namespace A2AFragmentFixer
         private static string FlattenString(string s)
         {
             string res = s.Replace("  ", "").Replace("\r\n", "");
+            RegexOptions options = ((RegexOptions.IgnorePatternWhitespace | RegexOptions.Multiline) | RegexOptions.IgnoreCase);
 
             //Remove <linkUri>.*?</linkUri> as they are inconsistent
             string regex = "<linkUri>.*?</linkUri>";
-            RegexOptions options = ((RegexOptions.IgnorePatternWhitespace | RegexOptions.Multiline) | RegexOptions.IgnoreCase);
-            Regex reg = new System.Text.RegularExpressions.Regex(regex, options);
+            Regex reg = new Regex(regex, options);
             res = reg.Replace(res, "");
+
+            // xlink:href="6889df10-8cc4-4d8a-8a43-1477b0832911#__top"
+            //string regex2 = "\\ xlink:href=.*?\\#__top\\\"";
+            //Regex reg2 = new Regex(regex2, options);
+            //res = reg2.Replace(res, "");
 
             return res;
         }
@@ -143,15 +201,16 @@ namespace A2AFragmentFixer
             }
             else
             {
-                string flatIntlFragText = FlattenString(StripFragment(File.ReadAllText(fragmentPath)));
+                string flatIntlFragText = FlattenString(StripFragment(File.ReadAllText(intlFragmentPath)));
                 if (!flatArticleText.Contains(flatIntlFragText))
                 {
-                    Console.WriteLine("Neither FR is in file: [" + Path.GetFileName(fragmentPath) + "] [" + Path.GetFileName(articlePath) + "]");
-                    file.WriteLine("Neither FR is in file: [" + Path.GetFileName(fragmentPath) + "] [" + Path.GetFileName(articlePath) + "]");
+                    Console.WriteLine("Neither FR is in file: [" + Path.GetFileName(intlFragmentPath) + "] [" + Path.GetFileName(articlePath) + "]");
+                    file.WriteLine("Neither FR is in file: [" + Path.GetFileName(intlFragmentPath) + "] [" + Path.GetFileName(articlePath) + "]");
                     return false;
                 }
             }
-            file.WriteLine(" OK: [" + Path.GetFileName(fragmentPath) + "] [" + Path.GetFileName(articlePath) + "]");
+            Console.WriteLine(" OK: [Intl: " + Path.GetFileName(intlFragmentPath) + "] [" + Path.GetFileName(articlePath) + "]");
+            file.WriteLine(" OK: [Intl: " + Path.GetFileName(intlFragmentPath) + "] [" + Path.GetFileName(articlePath) + "]");
 
             //XElement usFragment = ExtractFragment(fragmentPath);
             //XDocument intlDoc = XDocument.Load(fragmentPath);
@@ -262,7 +321,7 @@ namespace A2AFragmentFixer
         {
             Dictionary<string, string> res = new Dictionary<string, string>();
             var convPath = Path.Combine(basePath, "Converted");
-            foreach (var f in Directory.GetFiles(convPath, "*.xml"))
+            foreach (var f in Directory.EnumerateFiles(convPath, "*.xml"))
             {
                 //HA010186549.10.4.xml //VA102811844.0.14.xml
                 var fName = Path.GetFileName(f);
